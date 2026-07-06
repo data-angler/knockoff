@@ -1,3 +1,5 @@
+![Knockoff: Amazon, without the knockoffs](store-assets/promo-marquee.png)
+
 # Knockoff
 
 **A Chrome extension that filters pseudo-brand junk out of Amazon.** Buy from

@@ -2,3 +2,5 @@
 node_modules/
 report-worker/.secrets.local
 report-worker/.wrangler/
+.env.cws
+knockoff-v*.zip
