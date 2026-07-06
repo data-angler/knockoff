@@ -125,4 +125,4 @@ heuristic scorer, with the allowlist as veto.
 
 ## License
 
-[MIT](LICENSE)
+[FSL-1.1-MIT](LICENSE) — code converts to MIT after two years.
