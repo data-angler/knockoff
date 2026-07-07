@@ -98,7 +98,7 @@ jobs:
           echo "Publish response ($HTTP_CODE): $BODY"
           STATE=$(echo "$BODY" | node -e "
             const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-            console.log(d.status?.publisherStatus || d.status || 'UNKNOWN')
+            console.log(d.state || d.status?.publisherStatus || d.status || 'UNKNOWN')
           " 2>/dev/null || echo "UNKNOWN")
           echo "Publish state: $STATE"
           case "$STATE" in
