@@ -22,7 +22,7 @@ Or load it unpacked for development:
 3. Turn on **Developer mode** (top right)
 4. Click **Load unpacked** and select the repo folder
 
-Works on amazon.com, .ca, .co.uk, and .com.au.
+Works on every Amazon marketplace.
 
 ### Safari
 
@@ -129,7 +129,10 @@ scripts/               maintenance scripts
   zero network calls.
 - Carousels and a few exotic tile layouts aren't scanned yet
   (`TILE_SELECTORS` in `src/content.js` is the extension point).
-- English marketplaces only for now; the heuristics are tuned for English.
+- Non-English stores are best-effort. Brand lists and the product-page chip work
+  everywhere, but the name heuristics are English-tuned, so an unlisted local
+  brand can slip through. Non-Latin listings (Japanese, Arabic) are skipped rather
+  than mis-filtered, so nothing breaks on any marketplace.
 
 ## Prior art
 
