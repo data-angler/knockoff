@@ -70,7 +70,10 @@
   var TILE_SELECTORS = [
     'div[data-component-type="s-search-result"]', // search results
     'div.octopus-pc-item[data-asin]',             // category "octopus" pages
-    'li[class*="ProductGridItem"][data-asin]'     // some browse grids
+    'li[class*="ProductGridItem"][data-asin]',    // some browse grids
+    // p13n "faceout" recommendation grids: "Keep shopping for" mission pages
+    // (/hz/mobile/mission/), homepage rows, "Related to items you've viewed".
+    'div.p13n-intuition-product-faceout__top-container[data-asin]'
   ].join(",");
 
   // Engraved-line SVG glyphs (24 viewBox, 2px round stroke). Static strings
@@ -179,7 +182,13 @@
              tile.querySelector("h2");
     var text = h2
       ? h2.textContent || h2.getAttribute("aria-label") || ""
-      : (tile.querySelector("a.a-text-normal") || {}).textContent || "";
+      // p13n "faceout" tiles carry no h2: the title is a non-bold
+      // .a-size-base-plus span (its bold siblings are the brand row and an
+      // "In cart" status). The brand is embedded at the front of this title,
+      // so classify() reads it from there like any other layout.
+      : (tile.querySelector("a.a-text-normal") ||
+         tile.querySelector(".a-size-base-plus:not(.a-text-bold)") ||
+         {}).textContent || "";
     return text.replace(SPONSORED_PREFIX, "");
   }
 
@@ -194,6 +203,19 @@
     return text && text.length <= 30 && !/\d{3,}/.test(text) ? text : "";
   }
 
+  // A book / music / movie tile carries Amazon's format-swatch links
+  // (Paperback, Kindle Edition, Audiobook, Blu-ray, Prime Video, Audio CD...).
+  // The label text is localized-ish, but the element's class pair is stable
+  // across marketplaces, so we key off the element, not the word — physical
+  // goods tiles never render it (verified 0/60 on a "screwdriver set" search).
+  // This catches media works on an all-departments (search-alias=aps) search,
+  // where the page-level department skip in scan() can't fire because there's
+  // no book/music/movie alias to match. Skipping is the safe direction: a tile
+  // we sit out is simply left unfiltered, never mislabeled.
+  function tileIsMediaWork(tile) {
+    return !!tile.querySelector("a.s-link-style.a-text-bold");
+  }
+
   // Get product rating. Prefer alt text as star icons increment by half stars
   function tileRating(tile) {
     var alt = tile.querySelector(".a-icon-alt");
@@ -204,13 +226,24 @@
     return m ? parseFloat(m[1] + (m[2] ? "." + m[2] : "")) : null;
   }
 
-  // Get review count from #customerReviews. Prefer aria-label with exact count
+  // Get review count. Prefer the count link's aria-label / text (it carries the
+  // exact number even when the visible text is abbreviated). querySelector on a
+  // comma list returns the first match in DOM order, not the first selector, so
+  // try the trustworthy link selectors first and only then the generic span —
+  // and gate that span on count-shaped text so a stray number (price, rank,
+  // "20% off") can't be misread as a review count.
   function tileReviews(tile) {
-    var el = tile.querySelector(
-      'a[href*="customerReviews"], a[aria-label$="ratings"], a[aria-label$="rating"], span.a-size-base.s-underline-text'
+    var link = tile.querySelector(
+      'a[href*="customerReviews"], a[aria-label$="ratings"], a[aria-label$="rating"]'
     );
-    if (!el) return null;
-    return Knockoff.parseReviewCount(el.getAttribute("aria-label") || el.textContent || "");
+    if (link) {
+      var n = Knockoff.parseReviewCount(link.getAttribute("aria-label") || link.textContent || "");
+      if (n !== null) return n;
+    }
+    var span = tile.querySelector("span.a-size-base.s-underline-text");
+    var text = span ? span.textContent.trim() : "";
+    if (/^\(?\s*[\d.,]+\s*[kKmM]?\+?\s*\)?$/.test(text)) return Knockoff.parseReviewCount(text);
+    return null;
   }
 
   // Rating verdict for products that pass the brand pipeline.
@@ -227,6 +260,13 @@
 
   function processTile(tile) {
     if (tile.hasAttribute("data-ko-verdict")) return;
+    // Books/music/movies on an all-departments search: the title is the work,
+    // not a brand-led product name, so classification misfires ("The Canterbury
+    // Tales" → unbranded). Mark it media and sit out, same as a media category.
+    if (tileIsMediaWork(tile)) {
+      tile.setAttribute("data-ko-verdict", "media");
+      return;
+    }
     // A dedicated brand byline is authoritative — classify it as the brand
     // directly, so a real brand whose name opens with an ordinary word
     // ("Pet Junkie") isn't misread as unbranded once Amazon strips it from the
@@ -694,6 +734,45 @@
     spRow.appendChild(spText);
     spRow.appendChild(spSwitch);
     card.appendChild(spRow);
+
+    // Rating & review cutoffs: coarse presets for honing results while
+    // shopping. Exact thresholds live on the options page. Values are numeric
+    // (0 = off) so they round-trip with the detector and the options controls.
+    card.appendChild(el("div", "ko-panel-rule"));
+    var l3 = el("div", "ko-panel-label");
+    l3.textContent = "Minimum rating";
+    card.appendChild(l3);
+    card.appendChild(segControl("minRating", [
+      { value: 0, label: "Off" },
+      { value: 4, label: "4★" },
+      { value: 4.5, label: "4.5★" }
+    ]));
+    card.appendChild(el("div", "ko-panel-rule"));
+    var l4 = el("div", "ko-panel-label");
+    l4.textContent = "Minimum reviews";
+    card.appendChild(l4);
+    card.appendChild(segControl("minReviews", [
+      { value: 0, label: "Off" },
+      { value: 100, label: "100+" },
+      { value: 1000, label: "1K+" }
+    ]));
+    card.appendChild(el("div", "ko-panel-rule"));
+    var unRow = el("label", "ko-panel-toggle");
+    var unText = el("span", "ko-panel-toggle-label");
+    unText.textContent = "Filter unrated listings";
+    var unSwitch = el("span", "ko-switch");
+    var unInput = document.createElement("input");
+    unInput.type = "checkbox";
+    unInput.id = "ko-panel-unrated";
+    unInput.addEventListener("change", function () {
+      chrome.storage.sync.set({ filterUnrated: unInput.checked });
+    });
+    unSwitch.appendChild(unInput);
+    unSwitch.appendChild(el("span", "ko-switch-slider"));
+    unRow.appendChild(unText);
+    unRow.appendChild(unSwitch);
+    card.appendChild(unRow);
+
     panel.appendChild(card);
 
     // footer
@@ -782,12 +861,16 @@
     panel.classList.toggle("ko-panel-off", !settings.enabled);
     document.getElementById("ko-panel-enabled").checked = settings.enabled;
     document.getElementById("ko-panel-sponsored").checked = settings.hideSponsored;
+    document.getElementById("ko-panel-unrated").checked = settings.filterUnrated;
     document.getElementById("ko-panel-num").textContent = stats.filtered;
     document.getElementById("ko-panel-hint").textContent = LEVEL_HINTS[settings.level];
     panel.querySelectorAll("[data-ko-seg]").forEach(function (track) {
       var key = track.getAttribute("data-ko-seg");
       track.querySelectorAll("button").forEach(function (b) {
-        b.classList.toggle("ko-seg-active", b.getAttribute("data-v") === settings[key]);
+        // data-v is a string; minRating/minReviews are numbers, so compare as
+        // strings. A custom options-set value (e.g. 250) matches no preset and
+        // simply leaves the segment unhighlighted.
+        b.classList.toggle("ko-seg-active", b.getAttribute("data-v") === String(settings[key]));
       });
     });
     chrome.storage.local.get({ lifetimeFiltered: 0 }).then(function (s) {

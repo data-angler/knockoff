@@ -160,6 +160,10 @@ check("parseReviewCount K comma decimal", Knockoff.parseReviewCount("1,2K"), 120
 check("parseReviewCount K plus", Knockoff.parseReviewCount("3K+"), 3000);
 check("parseReviewCount M", Knockoff.parseReviewCount("1.1M"), 1100000);
 check("parseReviewCount word after digit", Knockoff.parseReviewCount("1 Kundenrezension"), 1);
+// A combined rating+count aria-label must yield the trailing count, not every
+// digit concatenated (would be 4,551,234).
+check("parseReviewCount combined label", Knockoff.parseReviewCount("4.5 out of 5 stars, 1,234 ratings"), 1234);
+check("parseReviewCount combined K label", Knockoff.parseReviewCount("4.5 out of 5 stars, 1.2K ratings"), 1200);
 
 var rOff = { minRating: 0, minReviews: 0, filterUnrated: false };
 var r4 = { minRating: 4, minReviews: 0, filterUnrated: false };

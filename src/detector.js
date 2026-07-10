@@ -66,7 +66,12 @@ var Knockoff = (function () {
       var n = parseFloat(abbr[1].replace(",", "."));
       return Math.round(n * (abbr[2].toLowerCase() === "k" ? 1e3 : 1e6));
     }
-    var digits = text.replace(/[^\d]/g, "");
+    // Take the LAST number run, so a combined label such as
+    // "4.5 out of 5 stars, 1,234 ratings" yields 1234 — not every digit
+    // concatenated. The count trails the rating in every locale we've seen.
+    var groups = text.match(/\d[\d.,]*/g);
+    if (!groups) return null;
+    var digits = groups[groups.length - 1].replace(/[^\d]/g, "");
     if (!digits) return null;
     return parseInt(digits, 10);
   }

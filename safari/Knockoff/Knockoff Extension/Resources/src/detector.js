@@ -66,7 +66,12 @@ var Knockoff = (function () {
       var n = parseFloat(abbr[1].replace(",", "."));
       return Math.round(n * (abbr[2].toLowerCase() === "k" ? 1e3 : 1e6));
     }
-    var digits = text.replace(/[^\d]/g, "");
+    // Take the LAST number run, so a combined label such as
+    // "4.5 out of 5 stars, 1,234 ratings" yields 1234 — not every digit
+    // concatenated. The count trails the rating in every locale we've seen.
+    var groups = text.match(/\d[\d.,]*/g);
+    if (!groups) return null;
+    var digits = groups[groups.length - 1].replace(/[^\d]/g, "");
     if (!digits) return null;
     return parseInt(digits, 10);
   }
@@ -227,6 +232,7 @@ var Knockoff = (function () {
 
   function extractBrand(title, userKeys) {
     if (!title) return null;
+    title = stripBaitBracket(title);
 
     // Local-script lead (Japanese, Arabic, …): the leading brand can't be read
     // or scored, so only the blocklist is reliable here. Find a listed
@@ -352,6 +358,32 @@ var Knockoff = (function () {
       if (COMPAT_MARKERS.has(words[i].toLowerCase())) return true;
     }
     return false;
+  }
+
+  // A *leading* bracket that pitches certification or compatibility — "[Apple
+  // MFi Certified]", "[Compatible with iPhone]" — is bait, not the brand. Left
+  // in place, brand extraction latches onto the ecosystem name inside ("Apple")
+  // and greenlights the listing as that brand. Strip such a bracket so the brand
+  // is read from what follows: a real brand after it is still recognized (it's
+  // on a list), while pure junk falls through to unbranded/heuristics. A bracket
+  // holding the seller's own brand ("[SZHLUX]") carries no pitch word, so it's
+  // kept and scored normally.
+  var BRACKET_CERT_BAIT = new Set(["certified", "certification", "mfi"]);
+
+  function stripBaitBracket(title) {
+    var m = /^\s*[[(【]([^\])】]*)[\])】]\s*/.exec(title);
+    if (!m) return title;
+    var words = m[1].split(/[^A-Za-z0-9]+/).map(function (w) {
+      return w.toLowerCase();
+    }).filter(Boolean);
+    var certified = words.some(function (k) { return BRACKET_CERT_BAIT.has(k); });
+    var compatible = words.some(function (k) { return COMPAT_BAIT.has(k); }) &&
+      words.some(function (k) {
+        return k === "compatible" || COMPAT_MARKERS.has(k);
+      });
+    var baited = certified || compatible;
+    var rest = title.slice(m[0].length);
+    return baited && rest.trim() ? rest : title;
   }
 
   // First ecosystem word in a compatibility phrase that isn't the brand itself,
@@ -485,7 +517,7 @@ var Knockoff = (function () {
       // Local-script title with no listed pseudo-brand: we can't read it, so
       // fail open. "foreign" is acted on by no filter level (unlike "unbranded",
       // which standard would filter — dimming whole pages on .co.jp/.sa/.eg).
-      if (startsWithLocalScript(title)) {
+      if (startsWithLocalScript(stripBaitBracket(title))) {
         return { verdict: "foreign", brand: null, key: null,
                  reason: "listing isn't in a script Knockoff can read yet" };
       }
