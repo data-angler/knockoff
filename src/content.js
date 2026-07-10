@@ -42,6 +42,7 @@
   // feeding the panel's "Filtered brands" list.
   var stats = { scanned: 0, filtered: 0, byVerdict: {}, brands: {} };
   var revealed = false; // session-only "show hidden items" toggle
+  var brandsCollapsed = false; // persisted: panel "Filtered brands" box folded shut
 
   // Lifetime tally shown in the popup. Deduped per ASIN per page load so
   // rescans (settings changes) don't double-count; drift across concurrent
@@ -89,7 +90,8 @@
     ban:      S + '<circle cx="12" cy="12" r="9"/><path d="m5.7 5.7 12.6 12.6"/></svg>',
     x:        S + '<path d="m6 6 12 12M18 6 6 18"/></svg>',
     flag:     S + '<path d="M5 21V4.5C7.7 3 10.3 3 13 4.5c2 1.1 4 1.3 6 .6V15c-2 .7-4 .5-6-.6-2.7-1.5-5.3-1.5-8 0"/></svg>',
-    star:     S + '<path d="M12 3.2l2.6 5.27 5.82.85-4.21 4.1.99 5.8L12 16.9l-5.2 2.73.99-5.8-4.21-4.1 5.82-.85z"/></svg>'
+    star:     S + '<path d="M12 3.2l2.6 5.27 5.82.85-4.21 4.1.99 5.8L12 16.9l-5.2 2.73.99-5.8-4.21-4.1 5.82-.85z"/></svg>',
+    caret:    S + '<path d="m6 9 6 6 6-6"/></svg>'
   };
 
   var VERDICT_META = {
@@ -814,9 +816,24 @@
     list.style.display = entries.length ? "" : "none";
     if (!entries.length) return;
 
-    var heading = el("div", "ko-panel-label");
+    // The heading is a disclosure toggle. Folding the box shut frees the
+    // vertical space it takes (it's the tallest, most variable section), so the
+    // controls below stay reachable on short screens. State persists.
+    var header = document.createElement("button");
+    header.type = "button";
+    header.className = "ko-brand-head";
+    var heading = el("span", "ko-panel-label");
     heading.textContent = "Filtered brands";
-    list.appendChild(heading);
+    header.appendChild(heading);
+    var caret = el("span", "ko-brand-caret");
+    caret.innerHTML = ICONS.caret; // static markup only
+    header.appendChild(caret);
+    header.addEventListener("click", function () {
+      brandsCollapsed = !brandsCollapsed;
+      chrome.storage.local.set({ brandsCollapsed: brandsCollapsed });
+      applyBrandsCollapsed(list);
+    });
+    list.appendChild(header);
     // Rows scroll; the heading stays pinned above them.
     var scroll = el("div", "ko-brand-scroll");
     list.appendChild(scroll);
@@ -850,6 +867,14 @@
       more.textContent = "+" + (entries.length - MAX_ROWS) + " more";
       scroll.appendChild(more);
     }
+    applyBrandsCollapsed(list);
+  }
+
+  // Reflect the persisted fold state onto the brands box (CSS hides the rows).
+  function applyBrandsCollapsed(list) {
+    list.classList.toggle("ko-brands-collapsed", brandsCollapsed);
+    var head = list.querySelector(".ko-brand-head");
+    if (head) head.setAttribute("aria-expanded", String(!brandsCollapsed));
   }
 
   // Refresh the panel's numbers and control states from current settings,
@@ -1000,6 +1025,10 @@
     if (event.target.closest && (event.target.closest(".ko-menu") || event.target.closest(".ko-badge"))) return;
     document.querySelectorAll(".ko-menu").forEach(function (menu) { menu.remove(); });
   }, true);
+
+  chrome.storage.local.get({ brandsCollapsed: false }).then(function (s) {
+    brandsCollapsed = s.brandsCollapsed;
+  });
 
   loadSettings()
     .then(loadCommunityList)

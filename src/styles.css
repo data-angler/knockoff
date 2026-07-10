@@ -415,6 +415,48 @@ html.ko-hide-sponsored .s-result-item.s-widget:has(
   margin-bottom: 5px;
 }
 
+/* The heading doubles as a collapse toggle; folding the box shut frees space
+   on short screens. The button owns the gap to the rows, so zero it on the
+   label; collapsing hides the rows and points the caret right. */
+.ko-brand-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.ko-brand-head .ko-panel-label {
+  margin-bottom: 0;
+}
+
+.ko-brand-caret {
+  display: flex;
+  color: #a1a1aa;
+  transition: transform 0.15s ease;
+}
+
+.ko-brand-caret svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ko-brands-collapsed .ko-brand-head {
+  margin-bottom: 0;
+}
+
+.ko-brands-collapsed .ko-brand-caret {
+  transform: rotate(-90deg);
+}
+
+.ko-brands-collapsed .ko-brand-scroll {
+  display: none;
+}
+
 /* Heading stays pinned; only the rows scroll. 6 rows tall, then scrolls.
    padding-right keeps the overlay scrollbar off the shield buttons. */
 .ko-brand-scroll {
